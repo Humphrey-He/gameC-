@@ -1,0 +1,51 @@
+@host = http://localhost:5056
+
+GET {{host}}/
+
+###
+
+GET {{host}}/openapi/v1.json
+
+###
+
+POST {{host}}/players
+Content-Type: application/json
+
+{
+  "name": "Alice",
+  "level": 10,
+  "region": "CN",
+  "gold": 500
+}
+
+###
+
+POST {{host}}/players
+Content-Type: application/json
+
+{
+  "name": "Bob",
+  "level": 25,
+  "region": "NA",
+  "gold": 1200
+}
+
+###
+
+GET {{host}}/players
+
+###
+
+GET {{host}}/players/search?keyword=ali
+
+###
+
+GET {{host}}/players/by-region/CN
+
+###
+
+GET {{host}}/rankings/top?count=10
+
+###
+
+GET {{host}}/stats/regions
