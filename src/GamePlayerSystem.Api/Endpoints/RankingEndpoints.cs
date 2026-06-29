@@ -20,10 +20,11 @@ public static class RankingEndpoints
         return group;
     }
 
-    private static IResult GetTopRanking(
+    private static async Task<IResult> GetTopRanking(
         int? count,
         PlayerApplication playerApplication,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
     {
         ILogger logger = loggerFactory.CreateLogger("RankingEndpoints");
         int rankingCount = count.GetValueOrDefault(10);
@@ -35,6 +36,6 @@ public static class RankingEndpoints
         }
 
         logger.LogInformation("Top ranking requested. Count: {Count}", rankingCount);
-        return Results.Ok(playerApplication.GetRanking(rankingCount));
+        return Results.Ok(await playerApplication.GetRankingAsync(rankingCount, cancellationToken));
     }
 }

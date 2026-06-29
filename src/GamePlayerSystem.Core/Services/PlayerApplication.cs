@@ -1,59 +1,77 @@
 using GamePlayerSystem.Core.Common;
 using GamePlayerSystem.Core.Dtos;
 using GamePlayerSystem.Core.Models;
+using GamePlayerSystem.Core.Repositories;
 
 namespace GamePlayerSystem.Core.Services;
 
 public sealed class PlayerApplication
 {
-    private readonly Dictionary<Guid, Player> _playersById = new();
+    private readonly IPlayerRepository _repository;
 
-    public IReadOnlyCollection<Player> Players => _playersById.Values;
+    public PlayerApplication(IPlayerRepository repository)
+    {
+        _repository = repository;
+    }
 
-    public Result<PlayerSummaryDto> AddPlayer(CreatePlayerRequest request)
+    public async Task<Result<PlayerSummaryDto>> AddPlayerAsync(
+        CreatePlayerRequest request,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             return Result<PlayerSummaryDto>.Failure("玩家名称不能为空");
         }
 
-        if (NameExists(request.Name))
+        string playerName = request.Name.Trim();
+
+        if (await _repository.ExistsByNameAsync(playerName, cancellationToken: cancellationToken))
         {
             return Result<PlayerSummaryDto>.Failure("玩家名称已存在");
         }
 
         Player player = new Player
         {
-            Name = request.Name.Trim(),
+            Name = playerName,
             Level = request.Level,
             Region = NormalizeRegion(request.Region),
             Gold = request.Gold
         };
 
-        _playersById.Add(player.Id, player);
+        await _repository.AddAsync(player, cancellationToken);
+        await _repository.SaveChangesAsync(cancellationToken);
 
         return Result<PlayerSummaryDto>.Success(ToSummaryDto(player));
     }
 
-    public List<PlayerSummaryDto> GetPlayers()
+    public async Task<List<PlayerSummaryDto>> GetPlayersAsync(
+        int pageNumber = 1,
+        int pageSize = 20,
+        CancellationToken cancellationToken = default)
     {
-        return _playersById.Values
-            .OrderByDescending(p => p.Level)
-            .ThenBy(p => p.Id)
-            .Select(ToSummaryDto)
-            .ToList();
+        List<Player> players = await _repository.GetPagedAsync(pageNumber, pageSize, cancellationToken);
+        return players.Select(ToSummaryDto).ToList();
     }
 
-    public Result<PlayerSummaryDto> GetPlayer(Guid id)
+    public async Task<Result<PlayerSummaryDto>> GetPlayerAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
-        return _playersById.TryGetValue(id, out Player? player)
+        Player? player = await _repository.GetByIdAsync(id, cancellationToken);
+
+        return player is not null
             ? Result<PlayerSummaryDto>.Success(ToSummaryDto(player))
             : Result<PlayerSummaryDto>.Failure("玩家不存在");
     }
 
-    public Result UpdatePlayer(Guid id, UpdatePlayerRequest request)
+    public async Task<Result> UpdatePlayerAsync(
+        Guid id,
+        UpdatePlayerRequest request,
+        CancellationToken cancellationToken = default)
     {
-        if (!_playersById.TryGetValue(id, out Player? player))
+        Player? player = await _repository.GetTrackedByIdAsync(id, cancellationToken);
+
+        if (player is null)
         {
             return Result.Failure("玩家不存在，无法修改");
         }
@@ -63,32 +81,48 @@ public sealed class PlayerApplication
             return Result.Failure("玩家名称不能为空");
         }
 
-        bool duplicateName = _playersById.Values.Any(p =>
-            p.Id != id && string.Equals(p.Name, request.Name, StringComparison.OrdinalIgnoreCase));
+        string playerName = request.Name.Trim();
+        bool duplicateName = await _repository.ExistsByNameAsync(playerName, id, cancellationToken);
 
         if (duplicateName)
         {
             return Result.Failure("玩家名称已存在");
         }
 
-        player.Name = request.Name.Trim();
+        player.Name = playerName;
         player.Level = request.Level;
         player.Region = NormalizeRegion(request.Region);
         player.Gold = request.Gold;
 
+        await _repository.SaveChangesAsync(cancellationToken);
+
         return Result.Success();
     }
 
-    public Result RemoveById(Guid id)
+    public async Task<Result> RemoveByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
-        return _playersById.Remove(id)
-            ? Result.Success()
-            : Result.Failure("玩家不存在，无法删除");
+        Player? player = await _repository.GetTrackedByIdAsync(id, cancellationToken);
+
+        if (player is null)
+        {
+            return Result.Failure("玩家不存在，无法删除");
+        }
+
+        _repository.Remove(player);
+        await _repository.SaveChangesAsync(cancellationToken);
+
+        return Result.Success();
     }
 
-    public Result DisableById(Guid id)
+    public async Task<Result> DisableByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
-        if (!_playersById.TryGetValue(id, out Player? player))
+        Player? player = await _repository.GetTrackedByIdAsync(id, cancellationToken);
+
+        if (player is null)
         {
             return Result.Failure("玩家不存在，无法禁用");
         }
@@ -100,75 +134,56 @@ public sealed class PlayerApplication
 
         player.IsActive = false;
 
+        await _repository.SaveChangesAsync(cancellationToken);
+
         return Result.Success();
     }
 
-    public List<PlayerSummaryDto> GetPlayersByRegion(string region)
+    public async Task<List<PlayerSummaryDto>> GetPlayersByRegionAsync(
+        string region,
+        CancellationToken cancellationToken = default)
     {
         string normalizedRegion = NormalizeRegion(region);
+        List<Player> players = await _repository.GetByRegionAsync(normalizedRegion, cancellationToken);
 
-        return _playersById.Values
-            .Where(p => p.IsActive && p.Region == normalizedRegion)
-            .OrderByDescending(p => p.Level)
-            .ThenBy(p => p.Id)
-            .Select(ToSummaryDto)
-            .ToList();
+        return players.Select(ToSummaryDto).ToList();
     }
 
-    public List<PlayerSummaryDto> SearchPlayersByName(string keyword)
+    public async Task<List<PlayerSummaryDto>> SearchPlayersByNameAsync(
+        string keyword,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(keyword))
         {
             return new List<PlayerSummaryDto>();
         }
 
-        return _playersById.Values
-            .Where(p => p.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(p => p.Level)
-            .ThenBy(p => p.Id)
-            .Select(ToSummaryDto)
-            .ToList();
+        List<Player> players = await _repository.SearchByNameAsync(keyword, cancellationToken);
+        return players.Select(ToSummaryDto).ToList();
     }
 
-    public List<RankingPlayerDto> GetRanking(int count)
+    public async Task<List<RankingPlayerDto>> GetRankingAsync(
+        int count,
+        CancellationToken cancellationToken = default)
     {
-        return _playersById.Values
-            .Where(p => p.IsActive)
-            .OrderByDescending(p => p.CalculatePower())
-            .ThenBy(p => p.Id)
-            .Take(count)
-            .Select((p, index) => new RankingPlayerDto
+        List<Player> players = await _repository.GetTopByPowerAsync(count, cancellationToken);
+
+        return players
+            .Select((player, index) => new RankingPlayerDto
             {
                 Rank = index + 1,
-                PlayerId = p.Id,
-                Name = p.Name,
-                RegionName = p.GetRegionName(),
-                Level = p.Level,
-                Power = p.CalculatePower()
+                PlayerId = player.Id,
+                Name = player.Name,
+                RegionName = player.GetRegionName(),
+                Level = player.Level,
+                Power = player.CalculatePower()
             })
             .ToList();
     }
 
-    public List<RegionStatDto> GetRegionStats()
+    public Task<List<RegionStatDto>> GetRegionStatsAsync(CancellationToken cancellationToken = default)
     {
-        return _playersById.Values
-            .GroupBy(p => p.Region)
-            .Select(g => new RegionStatDto
-            {
-                Region = g.Key,
-                RegionName = Player.GetRegionName(g.Key),
-                PlayerCount = g.Count(),
-                ActivePlayerCount = g.Count(p => p.IsActive)
-            })
-            .OrderByDescending(x => x.PlayerCount)
-            .ThenBy(x => x.Region)
-            .ToList();
-    }
-
-    private bool NameExists(string name)
-    {
-        return _playersById.Values.Any(p =>
-            string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        return _repository.GetRegionStatsAsync(cancellationToken);
     }
 
     private static PlayerSummaryDto ToSummaryDto(Player player)

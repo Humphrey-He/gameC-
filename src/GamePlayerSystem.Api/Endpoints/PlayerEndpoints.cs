@@ -62,23 +62,32 @@ public static class PlayerEndpoints
         return group;
     }
 
-    private static IResult GetPlayers(
+    private static async Task<IResult> GetPlayers(
+        int? pageNumber,
+        int? pageSize,
         PlayerApplication playerApplication,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
     {
         ILogger logger = loggerFactory.CreateLogger("PlayerEndpoints");
         logger.LogInformation("Players requested");
 
-        return Results.Ok(playerApplication.GetPlayers());
+        List<PlayerSummaryDto> players = await playerApplication.GetPlayersAsync(
+            pageNumber.GetValueOrDefault(1),
+            pageSize.GetValueOrDefault(20),
+            cancellationToken);
+
+        return Results.Ok(players);
     }
 
-    private static IResult GetPlayerById(
+    private static async Task<IResult> GetPlayerById(
         Guid id,
         PlayerApplication playerApplication,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
     {
         ILogger logger = loggerFactory.CreateLogger("PlayerEndpoints");
-        Result<PlayerSummaryDto> result = playerApplication.GetPlayer(id);
+        Result<PlayerSummaryDto> result = await playerApplication.GetPlayerAsync(id, cancellationToken);
 
         if (result.IsFailure)
         {
@@ -89,13 +98,14 @@ public static class PlayerEndpoints
         return Results.Ok(result.Value);
     }
 
-    private static IResult CreatePlayer(
+    private static async Task<IResult> CreatePlayer(
         CreatePlayerRequest request,
         PlayerApplication playerApplication,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
     {
         ILogger logger = loggerFactory.CreateLogger("PlayerEndpoints");
-        Result<PlayerSummaryDto> result = playerApplication.AddPlayer(request);
+        Result<PlayerSummaryDto> result = await playerApplication.AddPlayerAsync(request, cancellationToken);
 
         if (result.IsFailure)
         {
@@ -109,14 +119,15 @@ public static class PlayerEndpoints
         return Results.Created($"/players/{player.PlayerId}", player);
     }
 
-    private static IResult UpdatePlayer(
+    private static async Task<IResult> UpdatePlayer(
         Guid id,
         UpdatePlayerRequest request,
         PlayerApplication playerApplication,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
     {
         ILogger logger = loggerFactory.CreateLogger("PlayerEndpoints");
-        Result result = playerApplication.UpdatePlayer(id, request);
+        Result result = await playerApplication.UpdatePlayerAsync(id, request, cancellationToken);
 
         if (result.IsFailure)
         {
@@ -130,13 +141,14 @@ public static class PlayerEndpoints
         return Results.NoContent();
     }
 
-    private static IResult DeletePlayer(
+    private static async Task<IResult> DeletePlayer(
         Guid id,
         PlayerApplication playerApplication,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
     {
         ILogger logger = loggerFactory.CreateLogger("PlayerEndpoints");
-        Result result = playerApplication.RemoveById(id);
+        Result result = await playerApplication.RemoveByIdAsync(id, cancellationToken);
 
         if (result.IsFailure)
         {
@@ -148,13 +160,14 @@ public static class PlayerEndpoints
         return Results.NoContent();
     }
 
-    private static IResult DisablePlayer(
+    private static async Task<IResult> DisablePlayer(
         Guid id,
         PlayerApplication playerApplication,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
     {
         ILogger logger = loggerFactory.CreateLogger("PlayerEndpoints");
-        Result result = playerApplication.DisableById(id);
+        Result result = await playerApplication.DisableByIdAsync(id, cancellationToken);
 
         if (result.IsFailure)
         {
@@ -168,27 +181,29 @@ public static class PlayerEndpoints
         return Results.NoContent();
     }
 
-    private static IResult GetPlayersByRegion(
+    private static async Task<IResult> GetPlayersByRegion(
         string region,
         PlayerApplication playerApplication,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
     {
         ILogger logger = loggerFactory.CreateLogger("PlayerEndpoints");
         logger.LogInformation("Players by region requested. Region: {Region}", region);
 
-        return Results.Ok(playerApplication.GetPlayersByRegion(region));
+        return Results.Ok(await playerApplication.GetPlayersByRegionAsync(region, cancellationToken));
     }
 
-    private static IResult SearchPlayers(
+    private static async Task<IResult> SearchPlayers(
         string? keyword,
         PlayerApplication playerApplication,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
     {
         ILogger logger = loggerFactory.CreateLogger("PlayerEndpoints");
         string searchKeyword = keyword ?? string.Empty;
 
         logger.LogInformation("Player search requested. Keyword: {Keyword}", searchKeyword);
 
-        return Results.Ok(playerApplication.SearchPlayersByName(searchKeyword));
+        return Results.Ok(await playerApplication.SearchPlayersByNameAsync(searchKeyword, cancellationToken));
     }
 }

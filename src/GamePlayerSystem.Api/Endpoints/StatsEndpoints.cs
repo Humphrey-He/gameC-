@@ -18,13 +18,14 @@ public static class StatsEndpoints
         return group;
     }
 
-    private static IResult GetRegionStats(
+    private static async Task<IResult> GetRegionStats(
         PlayerApplication playerApplication,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
     {
         ILogger logger = loggerFactory.CreateLogger("StatsEndpoints");
         logger.LogInformation("Region stats requested");
 
-        return Results.Ok(playerApplication.GetRegionStats());
+        return Results.Ok(await playerApplication.GetRegionStatsAsync(cancellationToken));
     }
 }

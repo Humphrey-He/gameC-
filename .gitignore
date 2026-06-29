@@ -9,4 +9,8 @@ obj/
 TestResults/
 coverage/
 data/*.db
+data/*.db-*
 data/*.json
+**/data/*.db
+**/data/*.db-*
+**/data/*.json
