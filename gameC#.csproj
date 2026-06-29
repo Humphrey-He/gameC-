@@ -10,7 +10,11 @@
 
   <ItemGroup>
     <Compile Remove="course-code\**\*.cs" />
+    <Compile Remove="src\**\*.cs" />
+    <Compile Remove="tests\**\*.cs" />
     <None Include="course-code\**\*" />
+    <None Include="src\**\*" />
+    <None Include="tests\**\*" />
   </ItemGroup>
 
 </Project>
